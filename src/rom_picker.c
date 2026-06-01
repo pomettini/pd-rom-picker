@@ -117,6 +117,20 @@ static void collect_file(const char *filename, void *userdata) {
 // ---------------------------------------------------------------------------
 
 void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
+  if (!pd || !config) {
+    if (pd)
+      pd->system->logToConsole("[rom_picker] rom_picker_init: pd and config must not be NULL");
+    return;
+  }
+  if (!config->folder || config->folder[0] == '\0') {
+    pd->system->logToConsole("[rom_picker] rom_picker_init: config->folder must not be empty");
+    return;
+  }
+  if (s.pd) {
+    pd->system->logToConsole("[rom_picker] rom_picker_init: already initialized; call rom_picker_free first");
+    rom_picker_free();
+  }
+
   memset(&s, 0, sizeof(s));
   s.pd = pd;
   s.on_select = config->on_select;
@@ -125,9 +139,11 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   const char *fontErr = NULL;
   s.font = pd->graphics->loadFont(
       "/System/Fonts/Asheville-Sans-14-Light.pft", &fontErr);
+  if (!s.font)
+    pd->system->logToConsole("[rom_picker] failed to load font: %s",
+                             fontErr ? fontErr : "unknown error");
 
-  strncpy(s.folder, config->folder ? config->folder : "",
-          ROM_PICKER_MAX_PATH - 1);
+  strncpy(s.folder, config->folder, ROM_PICKER_MAX_PATH - 1);
 
   FileStat st;
   if (pd->file->stat(s.folder, &st) != 0) {
@@ -205,12 +221,14 @@ static void draw(void) {
   pd->graphics->clear(kColorWhite);
 
   if (s.valid_count == 0) {
-    char msg[ROM_PICKER_MAX_PATH + 32];
-    snprintf(msg, sizeof(msg), "Please put ROMs in the %s folder", s.folder);
-    int tw = pd->graphics->getTextWidth(s.font, msg, strlen(msg),
-                                        kASCIIEncoding, 0);
-    pd->graphics->drawText(msg, strlen(msg), kASCIIEncoding,
-                           (SCREEN_WIDTH - tw) / 2, 113);
+    if (s.font) {
+      char msg[ROM_PICKER_MAX_PATH + 32];
+      snprintf(msg, sizeof(msg), "Please put ROMs in the %s folder", s.folder);
+      int tw = pd->graphics->getTextWidth(s.font, msg, strlen(msg),
+                                          kASCIIEncoding, 0);
+      pd->graphics->drawText(msg, strlen(msg), kASCIIEncoding,
+                             (SCREEN_WIDTH - tw) / 2, 113);
+    }
     return;
   }
 
@@ -258,6 +276,9 @@ static void draw(void) {
 // ---------------------------------------------------------------------------
 
 void rom_picker_update(void) {
+  if (!s.pd) {
+    return; // called before rom_picker_init
+  }
   handle_input();
   draw();
 }
