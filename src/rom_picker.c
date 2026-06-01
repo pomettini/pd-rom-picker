@@ -129,6 +129,11 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   strncpy(s.folder, config->folder ? config->folder : "",
           ROM_PICKER_MAX_PATH - 1);
 
+  FileStat st;
+  if (pd->file->stat(s.folder, &st) != 0) {
+    pd->file->mkdir(s.folder);
+  }
+
   if (config->extensions) {
     for (int i = 0; config->extensions[i] && i < ROM_PICKER_MAX_EXTENSIONS;
          i++) {
