@@ -1,0 +1,40 @@
+# Build output
+build/
+*.pdx
+*.pdz
+
+# Object files and compiled output
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Dependency / CMake artifacts
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Playdate simulator
+*.pdxinfo~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+*.icloud
+
+# Editors
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude Code
+.claude/
+
+# Codex / OpenAI
+.codex/
