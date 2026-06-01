@@ -235,12 +235,16 @@ static void draw(void) {
 
   if (s.valid_count == 0) {
     if (s.font) {
-      char msg[ROM_PICKER_MAX_PATH + 32];
-      snprintf(msg, sizeof(msg), "Please put ROMs in the %s folder", s.folder);
-      int tw = pd->graphics->getTextWidth(s.font, msg, strlen(msg),
-                                          kASCIIEncoding, 0);
-      pd->graphics->drawText(msg, strlen(msg), kASCIIEncoding,
-                             (SCREEN_WIDTH - tw) / 2, 113);
+      const char *line1 = "Please put ROMs in the folder:";
+      const char *line2 = s.folder;
+      int tw1 = pd->graphics->getTextWidth(s.font, line1, strlen(line1),
+                                           kASCIIEncoding, 0);
+      int tw2 = pd->graphics->getTextWidth(s.font, line2, strlen(line2),
+                                           kASCIIEncoding, 0);
+      pd->graphics->drawText(line1, strlen(line1), kASCIIEncoding,
+                             (SCREEN_WIDTH - tw1) / 2, 106);
+      pd->graphics->drawText(line2, strlen(line2), kASCIIEncoding,
+                             (SCREEN_WIDTH - tw2) / 2, 122);
     }
     return;
   }
