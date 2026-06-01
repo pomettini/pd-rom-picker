@@ -292,6 +292,6 @@ void rom_picker_update(void) {
   if (!s.pd) {
     return; // called before rom_picker_init
   }
-  handle_input();
   draw();
+  handle_input();
 }
