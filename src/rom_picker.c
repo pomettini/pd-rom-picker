@@ -145,9 +145,22 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
 
   strncpy(s.folder, config->folder, ROM_PICKER_MAX_PATH - 1);
 
-  FileStat st;
-  if (pd->file->stat(s.folder, &st) != 0) {
-    pd->file->mkdir(s.folder);
+  // Create each path segment so deeply-nested folders work on first run.
+  {
+    char tmp[ROM_PICKER_MAX_PATH];
+    strncpy(tmp, s.folder, ROM_PICKER_MAX_PATH - 1);
+    tmp[ROM_PICKER_MAX_PATH - 1] = '\0';
+    size_t len = strlen(tmp);
+    if (len > 1 && tmp[len - 1] == '/')
+      tmp[--len] = '\0';
+    for (char *p = tmp + 1; *p; p++) {
+      if (*p == '/') {
+        *p = '\0';
+        pd->file->mkdir(tmp);
+        *p = '/';
+      }
+    }
+    pd->file->mkdir(tmp);
   }
 
   if (config->extensions) {
