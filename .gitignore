@@ -28,7 +28,6 @@ Makefile
 *.icloud
 
 # Editors
-.vscode/
 *.swp
 *.swo
 *~

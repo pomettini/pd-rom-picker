@@ -1,0 +1,16 @@
+{
+    "configurations": [
+        {
+            "name": "Playdate",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${env:HOME}/Developer/PlaydateSDK/C_API"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c99",
+            "intelliSenseMode": "macos-clang-arm64"
+        }
+    ],
+    "version": 4
+}
