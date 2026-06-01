@@ -121,7 +121,10 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   s.pd = pd;
   s.on_select = config->on_select;
   s.userdata = config->userdata;
-  s.font = config->font;
+
+  const char *fontErr = NULL;
+  s.font = pd->graphics->loadFont(
+      "/System/Fonts/Asheville-Sans-14-Light.pft", &fontErr);
 
   strncpy(s.folder, config->folder ? config->folder : "",
           ROM_PICKER_MAX_PATH - 1);
@@ -143,6 +146,10 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
     if (s.files[i].valid) {
       s.valid_indices[s.valid_count++] = i;
     }
+  }
+
+  if (config->auto_load_single && s.valid_count == 1 && s.on_select) {
+    s.on_select(s.files[s.valid_indices[0]].path, s.userdata);
   }
 }
 
@@ -191,6 +198,16 @@ static void draw(void) {
     pd->graphics->setFont(s.font);
 
   pd->graphics->clear(kColorWhite);
+
+  if (s.valid_count == 0) {
+    char msg[ROM_PICKER_MAX_PATH + 32];
+    snprintf(msg, sizeof(msg), "Please put ROMs in the %s folder", s.folder);
+    int tw = pd->graphics->getTextWidth(s.font, msg, strlen(msg),
+                                        kASCIIEncoding, 0);
+    pd->graphics->drawText(msg, strlen(msg), kASCIIEncoding,
+                           (SCREEN_WIDTH - tw) / 2, 113);
+    return;
+  }
 
   for (int row = 0; row < VISIBLE_ROWS; row++) {
     int file_idx = s.scroll + row;

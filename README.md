@@ -47,7 +47,6 @@ RomPickerConfig config = {
     .extensions = extensions,
     .on_select  = on_rom_picked,
     .userdata   = NULL,
-    .font       = NULL,   // NULL = use the currently active font
 };
 
 rom_picker_init(pd, &config);
@@ -81,9 +80,9 @@ typedef struct {
     const char      **extensions;  // NULL-terminated list of valid extensions
                                    // without the dot, e.g. {"nes", "rom", NULL}
                                    // NULL means all files are valid
-    RomPickerCallback on_select;   // Called when A is pressed on a valid file
-    void             *userdata;    // Forwarded to on_select unchanged
-    LCDFont          *font;        // Font to render filenames; NULL = current font
+    RomPickerCallback on_select;      // Called when A is pressed on a valid file
+    void             *userdata;       // Forwarded to on_select unchanged
+    int               auto_load_single; // 1 = skip UI and load immediately when only one valid file is found (default 0)
 } RomPickerConfig;
 
 // Scan folder and initialise internal state. Call once before update.
