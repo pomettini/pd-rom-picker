@@ -44,6 +44,8 @@ static struct {
 
   int repeat_timer;
   int repeat_active;
+
+  float crank_accum;
 } s;
 
 // ---------------------------------------------------------------------------
@@ -241,6 +243,28 @@ static void handle_input(void) {
     int file_idx = s.valid_indices[s.cursor];
     if (file_idx >= s.scroll + VISIBLE_ROWS)
       s.scroll = file_idx - VISIBLE_ROWS + 1;
+  }
+
+  if (!s.pd->system->isCrankDocked()) {
+    s.crank_accum += s.pd->system->getCrankChange();
+    while (s.crank_accum >= 30.0f) {
+      s.crank_accum -= 30.0f;
+      if (s.cursor < s.valid_count - 1) {
+        s.cursor++;
+        int file_idx = s.valid_indices[s.cursor];
+        if (file_idx >= s.scroll + VISIBLE_ROWS)
+          s.scroll = file_idx - VISIBLE_ROWS + 1;
+      }
+    }
+    while (s.crank_accum <= -30.0f) {
+      s.crank_accum += 30.0f;
+      if (s.cursor > 0) {
+        s.cursor--;
+        int file_idx = s.valid_indices[s.cursor];
+        if (file_idx < s.scroll)
+          s.scroll = file_idx;
+      }
+    }
   }
 
   if (pushed & kButtonA) {
