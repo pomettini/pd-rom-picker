@@ -8,13 +8,15 @@
 #define LIST_X 10
 #define LIST_Y 14
 #define SCREEN_WIDTH 400
+#define REPEAT_INITIAL_DELAY 20 // frames before repeat starts (~667ms at 30fps)
+#define REPEAT_INTERVAL 4       // frames between repeats (~133ms at 30fps)
 
 // White pixels on a 50% checkerboard mask — painted over a row after drawing
 // text to make it appear dimmed on Playdate's 1-bit display.
 // Layout: 8 bytes image (all white), 8 bytes mask (50% active pixels).
-static LCDPattern kDimOverlay = {
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55};
+static LCDPattern kDimOverlay = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+                                 0xFF, 0xFF, 0xAA, 0x55, 0xAA, 0x55,
+                                 0xAA, 0x55, 0xAA, 0x55};
 
 typedef struct {
   char path[ROM_PICKER_MAX_PATH];
@@ -39,6 +41,9 @@ static struct {
 
   int cursor; // index into valid_indices[]
   int scroll; // index into files[] of the first visible row
+
+  int repeat_timer;
+  int repeat_active;
 } s;
 
 // ---------------------------------------------------------------------------
@@ -119,15 +124,18 @@ static void collect_file(const char *filename, void *userdata) {
 void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   if (!pd || !config) {
     if (pd)
-      pd->system->logToConsole("[rom_picker] rom_picker_init: pd and config must not be NULL");
+      pd->system->logToConsole(
+          "[rom_picker] rom_picker_init: pd and config must not be NULL");
     return;
   }
   if (!config->folder || config->folder[0] == '\0') {
-    pd->system->logToConsole("[rom_picker] rom_picker_init: config->folder must not be empty");
+    pd->system->logToConsole(
+        "[rom_picker] rom_picker_init: config->folder must not be empty");
     return;
   }
   if (s.pd) {
-    pd->system->logToConsole("[rom_picker] rom_picker_init: already initialized; call rom_picker_free first");
+    pd->system->logToConsole("[rom_picker] rom_picker_init: already "
+                             "initialized; call rom_picker_free first");
     rom_picker_free();
   }
 
@@ -137,8 +145,8 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   s.userdata = config->userdata;
 
   const char *fontErr = NULL;
-  s.font = pd->graphics->loadFont(
-      "/System/Fonts/Asheville-Sans-14-Light.pft", &fontErr);
+  s.font = pd->graphics->loadFont("/System/Fonts/Asheville-Sans-14-Light.pft",
+                                  &fontErr);
   if (!s.font)
     pd->system->logToConsole("[rom_picker] failed to load font: %s",
                              fontErr ? fontErr : "unknown error");
@@ -194,27 +202,48 @@ void rom_picker_free(void) { memset(&s, 0, sizeof(s)); }
 // ---------------------------------------------------------------------------
 
 static void handle_input(void) {
-  PDButtons pushed;
-  s.pd->system->getButtonState(NULL, &pushed, NULL);
+  PDButtons current, pushed;
+  s.pd->system->getButtonState(&current, &pushed, NULL);
 
   if (s.valid_count == 0)
     return;
 
-  if (pushed & kButtonUp) {
-    if (s.cursor > 0) {
-      s.cursor--;
-      int file_idx = s.valid_indices[s.cursor];
-      if (file_idx < s.scroll)
-        s.scroll = file_idx;
+  PDButtons dir = current & (kButtonUp | kButtonDown);
+  int move_up = 0, move_down = 0;
+
+  if (pushed & (kButtonUp | kButtonDown)) {
+    s.repeat_timer = 0;
+    s.repeat_active = 0;
+    move_up = !!(pushed & kButtonUp);
+    move_down = !!(pushed & kButtonDown);
+  } else if (dir) {
+    s.repeat_timer++;
+    int threshold = s.repeat_active ? REPEAT_INTERVAL : REPEAT_INITIAL_DELAY;
+    if (s.repeat_timer >= threshold) {
+      s.repeat_timer = 0;
+      s.repeat_active = 1;
+      move_up = !!(dir & kButtonUp);
+      move_down = !!(dir & kButtonDown);
     }
-  } else if (pushed & kButtonDown) {
-    if (s.cursor < s.valid_count - 1) {
-      s.cursor++;
-      int file_idx = s.valid_indices[s.cursor];
-      if (file_idx >= s.scroll + VISIBLE_ROWS)
-        s.scroll = file_idx - VISIBLE_ROWS + 1;
-    }
-  } else if (pushed & kButtonA) {
+  } else {
+    s.repeat_timer = 0;
+    s.repeat_active = 0;
+  }
+
+  if (move_up && s.cursor > 0) {
+    s.cursor--;
+    int file_idx = s.valid_indices[s.cursor];
+    if (file_idx < s.scroll)
+      s.scroll = file_idx;
+  }
+  if (move_down && s.cursor < s.valid_count - 1) {
+    s.cursor++;
+    int file_idx = s.valid_indices[s.cursor];
+    if (file_idx >= s.scroll + VISIBLE_ROWS)
+      s.scroll = file_idx - VISIBLE_ROWS + 1;
+  }
+
+  if (pushed & kButtonA) {
     if (s.on_select) {
       s.on_select(s.files[s.valid_indices[s.cursor]].path, s.userdata);
     }
