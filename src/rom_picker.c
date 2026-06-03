@@ -332,13 +332,13 @@ static void draw(void) {
 
   // scrollbar
   if (s.file_count > VISIBLE_ROWS) {
-    int track_h = 240 - LIST_Y * 2;
+    int track_h = 240;
     int thumb_h = track_h * VISIBLE_ROWS / s.file_count;
     if (thumb_h < 8)
       thumb_h = 8;
     int thumb_y =
-        LIST_Y + (track_h - thumb_h) * s.scroll / (s.file_count - VISIBLE_ROWS);
-    pd->graphics->fillRect(396, LIST_Y, 4, track_h, kColorBlack);
+        (track_h - thumb_h) * s.scroll / (s.file_count - VISIBLE_ROWS);
+    pd->graphics->fillRect(396, 0, 4, track_h, kColorBlack);
     pd->graphics->fillRect(397, thumb_y, 2, thumb_h, kColorWhite);
   }
 }
