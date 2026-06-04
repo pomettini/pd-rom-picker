@@ -3,10 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ROW_HEIGHT 20
-#define VISIBLE_ROWS 11
+#define ROW_HEIGHT 21
+#define VISIBLE_ROWS 10
 #define LIST_X 10
-#define LIST_Y 14
+#define LIST_Y 15
 #define SCREEN_WIDTH 400
 #define REPEAT_INITIAL_DELAY 20 // frames before repeat starts (~667ms at 30fps)
 #define REPEAT_INTERVAL 4       // frames between repeats (~133ms at 30fps)
