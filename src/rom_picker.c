@@ -295,9 +295,10 @@ static void draw(void) {
       const char *line2 = s.folder;
       LCDFont *line1_font = s.bold_font ? s.bold_font : s.font;
       int font_h = pd->graphics->getFontHeight(s.font);
-      int line_gap = (ROW_HEIGHT - font_h) * 2;
-      int line1_y = (240 - line_gap - font_h) / 2;
-      int line2_y = line1_y + line_gap;
+      int gap = 12; // 2× the 6px per-row padding; keeps lines readable
+      int total_h = font_h + gap + font_h;
+      int line1_y = (240 - total_h) / 2;
+      int line2_y = line1_y + font_h + gap;
       int tw1 = pd->graphics->getTextWidth(line1_font, line1, strlen(line1),
                                            kASCIIEncoding, 0);
       int tw2 = pd->graphics->getTextWidth(s.font, line2, strlen(line2),
