@@ -155,6 +155,9 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
                              fontErr ? fontErr : "unknown error");
   s.bold_font = pd->graphics->loadFont(
       "/System/Fonts/Asheville-Sans-14-Bold.pft", &fontErr);
+  if (!s.bold_font)
+    pd->system->logToConsole("[rom_picker] bold font not found, falling back to light: %s",
+                             fontErr ? fontErr : "unknown error");
 
   strncpy(s.folder, config->folder, ROM_PICKER_MAX_PATH - 1);
 
@@ -177,7 +180,7 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   }
 
   if (config->extensions) {
-    for (int i = 0; config->extensions[i] && i < ROM_PICKER_MAX_EXTENSIONS;
+    for (int i = 0; i < ROM_PICKER_MAX_EXTENSIONS && config->extensions[i];
          i++) {
       strncpy(s.extensions[i], config->extensions[i], 31);
       s.extensions[i][31] = '\0';
@@ -295,7 +298,7 @@ static void draw(void) {
       const char *line2 = s.folder;
       LCDFont *line1_font = s.bold_font ? s.bold_font : s.font;
       int font_h = pd->graphics->getFontHeight(s.font);
-      int line_gap = (ROW_HEIGHT - font_h) * 2;
+      int line_gap = (ROW_HEIGHT - font_h > 4 ? ROW_HEIGHT - font_h : 4) * 2;
       int line1_y = (240 - line_gap - font_h) / 2;
       int line2_y = line1_y + line_gap;
       int tw1 = pd->graphics->getTextWidth(line1_font, line1, strlen(line1),
