@@ -297,7 +297,7 @@ static void draw(void) {
       pd->graphics->drawText(line1, strlen(line1), kASCIIEncoding,
                              (SCREEN_WIDTH - tw1) / 2, 106);
       pd->graphics->drawText(line2, strlen(line2), kASCIIEncoding,
-                             (SCREEN_WIDTH - tw2) / 2, 122);
+                             (SCREEN_WIDTH - tw2) / 2, 106 + ROW_HEIGHT);
     }
     return;
   }
