@@ -311,7 +311,7 @@ static void draw(void) {
       const char *line2 = s.folder;
       LCDFont *line1_font = s.bold_font ? s.bold_font : s.font;
       int font_h = pd->graphics->getFontHeight(s.font);
-      int gap = font_h; // one line of breathing room between the two lines
+      int gap = 2 * (s.row_height - font_h); // 2× the between-entry padding
       int total_h = font_h + gap + font_h;
       int line1_y = (240 - total_h) / 2;
       int line2_y = line1_y + font_h + gap;
