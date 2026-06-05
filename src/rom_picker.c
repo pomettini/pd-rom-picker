@@ -27,7 +27,7 @@ typedef struct {
 static struct {
   PlaydateAPI *pd;
   char folder[ROM_PICKER_MAX_PATH];
-  char extensions[ROM_PICKER_MAX_EXTENSIONS][32];
+  char extensions[ROM_PICKER_MAX_EXTENSIONS][ROM_PICKER_MAX_EXT_LEN];
   int extension_count;
   RomPickerCallback on_select;
   void *userdata;
@@ -88,7 +88,7 @@ static int matches_extension(const char *filename) {
 }
 
 static int entry_compare(const void *a, const void *b) {
-  return strcmp(((const RomEntry *)a)->name, ((const RomEntry *)b)->name);
+  return strcasecmp(((const RomEntry *)a)->name, ((const RomEntry *)b)->name);
 }
 
 // ---------------------------------------------------------------------------
@@ -156,8 +156,9 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   s.bold_font = pd->graphics->loadFont(
       "/System/Fonts/Asheville-Sans-14-Bold.pft", &fontErr);
   if (!s.bold_font)
-    pd->system->logToConsole("[rom_picker] bold font not found, falling back to light: %s",
-                             fontErr ? fontErr : "unknown error");
+    pd->system->logToConsole(
+        "[rom_picker] bold font not found, falling back to light: %s",
+        fontErr ? fontErr : "unknown error");
 
   strncpy(s.folder, config->folder, ROM_PICKER_MAX_PATH - 1);
 
@@ -182,8 +183,8 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   if (config->extensions) {
     for (int i = 0; i < ROM_PICKER_MAX_EXTENSIONS && config->extensions[i];
          i++) {
-      strncpy(s.extensions[i], config->extensions[i], 31);
-      s.extensions[i][31] = '\0';
+      strncpy(s.extensions[i], config->extensions[i], ROM_PICKER_MAX_EXT_LEN - 1);
+      s.extensions[i][ROM_PICKER_MAX_EXT_LEN - 1] = '\0';
       s.extension_count++;
     }
   }
@@ -322,8 +323,7 @@ static void draw(void) {
 
     RomEntry *e = &s.files[file_idx];
     int y = LIST_Y + row * ROW_HEIGHT;
-    int is_selected =
-        (s.valid_count > 0 && s.valid_indices[s.cursor] == file_idx);
+    int is_selected = (s.valid_indices[s.cursor] == file_idx);
 
     if (is_selected) {
       pd->graphics->fillRect(0, y - 2, SCREEN_WIDTH, ROW_HEIGHT + 2,
@@ -345,7 +345,7 @@ static void draw(void) {
 
   // scrollbar
   if (s.file_count > VISIBLE_ROWS) {
-    int track_h = 240;
+    int track_h = 239;
     int thumb_h = track_h * VISIBLE_ROWS / s.file_count;
     if (thumb_h < 8)
       thumb_h = 8;

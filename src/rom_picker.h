@@ -5,6 +5,7 @@
 #define ROM_PICKER_MAX_FILES 256
 #define ROM_PICKER_MAX_PATH 256
 #define ROM_PICKER_MAX_EXTENSIONS 8
+#define ROM_PICKER_MAX_EXT_LEN 32
 
 typedef void (*RomPickerCallback)(const char *path, void *userdata);
 
