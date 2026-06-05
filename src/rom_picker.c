@@ -32,6 +32,7 @@ static struct {
   RomPickerCallback on_select;
   void *userdata;
   LCDFont *font;
+  LCDFont *bold_font;
 
   RomEntry files[ROM_PICKER_MAX_FILES];
   int file_count;
@@ -152,6 +153,8 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   if (!s.font)
     pd->system->logToConsole("[rom_picker] failed to load font: %s",
                              fontErr ? fontErr : "unknown error");
+  s.bold_font = pd->graphics->loadFont(
+      "/System/Fonts/Asheville-Sans-14-Bold.pft", &fontErr);
 
   strncpy(s.folder, config->folder, ROM_PICKER_MAX_PATH - 1);
 
@@ -290,14 +293,21 @@ static void draw(void) {
     if (s.font) {
       const char *line1 = "Please put ROMs in the folder:";
       const char *line2 = s.folder;
-      int tw1 = pd->graphics->getTextWidth(s.font, line1, strlen(line1),
+      LCDFont *line1_font = s.bold_font ? s.bold_font : s.font;
+      int font_h = pd->graphics->getFontHeight(s.font);
+      int line_gap = (ROW_HEIGHT - font_h) * 2;
+      int line1_y = (240 - line_gap - font_h) / 2;
+      int line2_y = line1_y + line_gap;
+      int tw1 = pd->graphics->getTextWidth(line1_font, line1, strlen(line1),
                                            kASCIIEncoding, 0);
       int tw2 = pd->graphics->getTextWidth(s.font, line2, strlen(line2),
                                            kASCIIEncoding, 0);
+      pd->graphics->setFont(line1_font);
       pd->graphics->drawText(line1, strlen(line1), kASCIIEncoding,
-                             (SCREEN_WIDTH - tw1) / 2, 106);
+                             (SCREEN_WIDTH - tw1) / 2, line1_y);
+      pd->graphics->setFont(s.font);
       pd->graphics->drawText(line2, strlen(line2), kASCIIEncoding,
-                             (SCREEN_WIDTH - tw2) / 2, 106 + ROW_HEIGHT);
+                             (SCREEN_WIDTH - tw2) / 2, line2_y);
     }
     return;
   }
