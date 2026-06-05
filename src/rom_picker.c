@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define ROW_HEIGHT 21
+#define VISIBLE_ROWS 10
 #define LIST_X 10
 #define LIST_Y 15
 #define SCREEN_WIDTH 400
@@ -25,7 +27,7 @@ typedef struct {
 static struct {
   PlaydateAPI *pd;
   char folder[ROM_PICKER_MAX_PATH];
-  char extensions[ROM_PICKER_MAX_EXTENSIONS][ROM_PICKER_MAX_EXT_LEN];
+  char extensions[ROM_PICKER_MAX_EXTENSIONS][32];
   int extension_count;
   RomPickerCallback on_select;
   void *userdata;
@@ -45,9 +47,6 @@ static struct {
   int repeat_active;
 
   float crank_accum;
-
-  int row_height;   // computed from actual font pixel height after init
-  int visible_rows; // how many rows fit between LIST_Y and the bottom
 } s;
 
 // ---------------------------------------------------------------------------
@@ -89,7 +88,7 @@ static int matches_extension(const char *filename) {
 }
 
 static int entry_compare(const void *a, const void *b) {
-  return strcasecmp(((const RomEntry *)a)->name, ((const RomEntry *)b)->name);
+  return strcmp(((const RomEntry *)a)->name, ((const RomEntry *)b)->name);
 }
 
 // ---------------------------------------------------------------------------
@@ -156,22 +155,6 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
                              fontErr ? fontErr : "unknown error");
   s.bold_font = pd->graphics->loadFont(
       "/System/Fonts/Asheville-Sans-14-Bold.pft", &fontErr);
-  if (!s.bold_font)
-    pd->system->logToConsole(
-        "[rom_picker] bold font not found, falling back to light: %s",
-        fontErr ? fontErr : "unknown error");
-
-  // getFontHeight returns the actual pixel height, which for bitmap fonts can
-  // differ from the design size in the filename (e.g. Asheville-Sans-14 is
-  // actually 20px tall). Derive row_height and visible_rows from the real
-  // metric so layout never assumes a fixed size.
-  {
-    int fh = s.font ? pd->graphics->getFontHeight(s.font) : 14;
-    s.row_height = fh + 6;
-    s.visible_rows = (240 - LIST_Y) / s.row_height;
-    if (s.visible_rows < 1)
-      s.visible_rows = 1;
-  }
 
   strncpy(s.folder, config->folder, ROM_PICKER_MAX_PATH - 1);
 
@@ -194,11 +177,10 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   }
 
   if (config->extensions) {
-    for (int i = 0; i < ROM_PICKER_MAX_EXTENSIONS && config->extensions[i];
+    for (int i = 0; config->extensions[i] && i < ROM_PICKER_MAX_EXTENSIONS;
          i++) {
-      strncpy(s.extensions[i], config->extensions[i],
-              ROM_PICKER_MAX_EXT_LEN - 1);
-      s.extensions[i][ROM_PICKER_MAX_EXT_LEN - 1] = '\0';
+      strncpy(s.extensions[i], config->extensions[i], 31);
+      s.extensions[i][31] = '\0';
       s.extension_count++;
     }
   }
@@ -262,8 +244,8 @@ static void handle_input(void) {
   if (move_down && s.cursor < s.valid_count - 1) {
     s.cursor++;
     int file_idx = s.valid_indices[s.cursor];
-    if (file_idx >= s.scroll + s.visible_rows)
-      s.scroll = file_idx - s.visible_rows + 1;
+    if (file_idx >= s.scroll + VISIBLE_ROWS)
+      s.scroll = file_idx - VISIBLE_ROWS + 1;
   }
 
   if (!s.pd->system->isCrankDocked()) {
@@ -273,8 +255,8 @@ static void handle_input(void) {
       if (s.cursor < s.valid_count - 1) {
         s.cursor++;
         int file_idx = s.valid_indices[s.cursor];
-        if (file_idx >= s.scroll + s.visible_rows)
-          s.scroll = file_idx - s.visible_rows + 1;
+        if (file_idx >= s.scroll + VISIBLE_ROWS)
+          s.scroll = file_idx - VISIBLE_ROWS + 1;
       }
     }
     while (s.crank_accum <= -30.0f) {
@@ -313,10 +295,9 @@ static void draw(void) {
       const char *line2 = s.folder;
       LCDFont *line1_font = s.bold_font ? s.bold_font : s.font;
       int font_h = pd->graphics->getFontHeight(s.font);
-      int gap = 2 * (s.row_height - font_h); // 2× the between-entry padding
-      int total_h = font_h + gap + font_h;
-      int line1_y = (240 - total_h) / 2;
-      int line2_y = line1_y + font_h + gap;
+      int line_gap = (ROW_HEIGHT - font_h) * 2;
+      int line1_y = (240 - line_gap - font_h) / 2;
+      int line2_y = line1_y + line_gap;
       int tw1 = pd->graphics->getTextWidth(line1_font, line1, strlen(line1),
                                            kASCIIEncoding, 0);
       int tw2 = pd->graphics->getTextWidth(s.font, line2, strlen(line2),
@@ -331,17 +312,18 @@ static void draw(void) {
     return;
   }
 
-  for (int row = 0; row < s.visible_rows; row++) {
+  for (int row = 0; row < VISIBLE_ROWS; row++) {
     int file_idx = s.scroll + row;
     if (file_idx >= s.file_count)
       break;
 
     RomEntry *e = &s.files[file_idx];
-    int y = LIST_Y + row * s.row_height;
-    int is_selected = (s.valid_indices[s.cursor] == file_idx);
+    int y = LIST_Y + row * ROW_HEIGHT;
+    int is_selected =
+        (s.valid_count > 0 && s.valid_indices[s.cursor] == file_idx);
 
     if (is_selected) {
-      pd->graphics->fillRect(0, y - 2, SCREEN_WIDTH, s.row_height + 2,
+      pd->graphics->fillRect(0, y - 2, SCREEN_WIDTH, ROW_HEIGHT + 2,
                              kColorBlack);
       pd->graphics->setDrawMode(kDrawModeInverted);
       pd->graphics->drawText(e->name, strlen(e->name), kASCIIEncoding, LIST_X,
@@ -350,7 +332,7 @@ static void draw(void) {
     } else if (!e->valid) {
       pd->graphics->drawText(e->name, strlen(e->name), kASCIIEncoding, LIST_X,
                              y);
-      pd->graphics->fillRect(0, y - 2, SCREEN_WIDTH, s.row_height + 2,
+      pd->graphics->fillRect(0, y - 2, SCREEN_WIDTH, ROW_HEIGHT + 2,
                              (LCDColor)kDimOverlay);
     } else {
       pd->graphics->drawText(e->name, strlen(e->name), kASCIIEncoding, LIST_X,
@@ -359,13 +341,13 @@ static void draw(void) {
   }
 
   // scrollbar
-  if (s.file_count > s.visible_rows) {
-    int track_h = 239;
-    int thumb_h = track_h * s.visible_rows / s.file_count;
+  if (s.file_count > VISIBLE_ROWS) {
+    int track_h = 240;
+    int thumb_h = track_h * VISIBLE_ROWS / s.file_count;
     if (thumb_h < 8)
       thumb_h = 8;
     int thumb_y =
-        (track_h - thumb_h) * s.scroll / (s.file_count - s.visible_rows);
+        (track_h - thumb_h) * s.scroll / (s.file_count - VISIBLE_ROWS);
     pd->graphics->fillRect(396, 0, 4, track_h, kColorBlack);
     pd->graphics->fillRect(397, thumb_y, 2, thumb_h, kColorWhite);
   }
