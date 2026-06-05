@@ -46,8 +46,8 @@ static struct {
 
   float crank_accum;
 
-  int row_height;    // computed from actual font pixel height after init
-  int visible_rows;  // how many rows fit between LIST_Y and the bottom
+  int row_height;   // computed from actual font pixel height after init
+  int visible_rows; // how many rows fit between LIST_Y and the bottom
 } s;
 
 // ---------------------------------------------------------------------------
@@ -169,7 +169,8 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
     int fh = s.font ? pd->graphics->getFontHeight(s.font) : 14;
     s.row_height = fh + 6;
     s.visible_rows = (240 - LIST_Y) / s.row_height;
-    if (s.visible_rows < 1) s.visible_rows = 1;
+    if (s.visible_rows < 1)
+      s.visible_rows = 1;
   }
 
   strncpy(s.folder, config->folder, ROM_PICKER_MAX_PATH - 1);
@@ -195,7 +196,8 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   if (config->extensions) {
     for (int i = 0; i < ROM_PICKER_MAX_EXTENSIONS && config->extensions[i];
          i++) {
-      strncpy(s.extensions[i], config->extensions[i], ROM_PICKER_MAX_EXT_LEN - 1);
+      strncpy(s.extensions[i], config->extensions[i],
+              ROM_PICKER_MAX_EXT_LEN - 1);
       s.extensions[i][ROM_PICKER_MAX_EXT_LEN - 1] = '\0';
       s.extension_count++;
     }
