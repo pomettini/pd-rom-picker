@@ -53,14 +53,6 @@ static struct {
 // Helpers
 // ---------------------------------------------------------------------------
 
-static int is_all_ascii(const char *str) {
-  for (const unsigned char *c = (const unsigned char *)str; *c; c++) {
-    if (*c < 0x20 || *c > 0x7E)
-      return 0;
-  }
-  return 1;
-}
-
 static int matches_extension(const char *filename) {
   if (s.extension_count == 0)
     return 1;
@@ -116,7 +108,7 @@ static void collect_file(const char *filename, void *userdata) {
   strncpy(e->name, filename, ROM_PICKER_MAX_PATH - 1);
   e->name[ROM_PICKER_MAX_PATH - 1] = '\0';
 
-  e->valid = is_all_ascii(filename) && matches_extension(filename);
+  e->valid = matches_extension(filename);
   s.file_count++;
 }
 
@@ -300,14 +292,14 @@ static void draw(void) {
       int line1_y = (240 - total_h) / 2;
       int line2_y = line1_y + font_h + gap;
       int tw1 = pd->graphics->getTextWidth(line1_font, line1, strlen(line1),
-                                           kASCIIEncoding, 0);
+                                           kUTF8Encoding, 0);
       int tw2 = pd->graphics->getTextWidth(s.font, line2, strlen(line2),
-                                           kASCIIEncoding, 0);
+                                           kUTF8Encoding, 0);
       pd->graphics->setFont(line1_font);
-      pd->graphics->drawText(line1, strlen(line1), kASCIIEncoding,
+      pd->graphics->drawText(line1, strlen(line1), kUTF8Encoding,
                              (SCREEN_WIDTH - tw1) / 2, line1_y);
       pd->graphics->setFont(s.font);
-      pd->graphics->drawText(line2, strlen(line2), kASCIIEncoding,
+      pd->graphics->drawText(line2, strlen(line2), kUTF8Encoding,
                              (SCREEN_WIDTH - tw2) / 2, line2_y);
     }
     return;
@@ -327,16 +319,16 @@ static void draw(void) {
       pd->graphics->fillRect(0, y - 2, SCREEN_WIDTH, ROW_HEIGHT + 2,
                              kColorBlack);
       pd->graphics->setDrawMode(kDrawModeInverted);
-      pd->graphics->drawText(e->name, strlen(e->name), kASCIIEncoding, LIST_X,
+      pd->graphics->drawText(e->name, strlen(e->name), kUTF8Encoding, LIST_X,
                              y);
       pd->graphics->setDrawMode(kDrawModeCopy);
     } else if (!e->valid) {
-      pd->graphics->drawText(e->name, strlen(e->name), kASCIIEncoding, LIST_X,
+      pd->graphics->drawText(e->name, strlen(e->name), kUTF8Encoding, LIST_X,
                              y);
       pd->graphics->fillRect(0, y - 2, SCREEN_WIDTH, ROW_HEIGHT + 2,
                              (LCDColor)kDimOverlay);
     } else {
-      pd->graphics->drawText(e->name, strlen(e->name), kASCIIEncoding, LIST_X,
+      pd->graphics->drawText(e->name, strlen(e->name), kUTF8Encoding, LIST_X,
                              y);
     }
   }
