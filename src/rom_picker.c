@@ -33,6 +33,9 @@ static struct {
   void *userdata;
   LCDFont *font;
   LCDFont *bold_font;
+  // Fallback for entries whose name contains non-ASCII bytes: the preferred
+  // Asheville face has no accented glyphs, so those rows render with Roobert.
+  LCDFont *accent_font;
 
   RomEntry files[ROM_PICKER_MAX_FILES];
   int file_count;
@@ -52,6 +55,24 @@ static struct {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// True if any byte falls outside printable ASCII — i.e. the name needs the
+// accent-capable fallback font to render correctly.
+static int has_non_ascii(const char *str) {
+  for (const unsigned char *c = (const unsigned char *)str; *c; c++) {
+    if (*c < 0x20 || *c > 0x7E)
+      return 1;
+  }
+  return 0;
+}
+
+// Font to draw a given entry name with: the accent fallback when the name has
+// non-ASCII bytes (and the fallback loaded), otherwise the preferred face.
+static LCDFont *font_for_name(const char *name) {
+  if (s.accent_font && has_non_ascii(name))
+    return s.accent_font;
+  return s.font;
+}
 
 static int matches_extension(const char *filename) {
   if (s.extension_count == 0)
@@ -147,6 +168,10 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
                              fontErr ? fontErr : "unknown error");
   s.bold_font = pd->graphics->loadFont(
       "/System/Fonts/Asheville-Sans-14-Bold.pft", &fontErr);
+  // Asheville has no accented glyphs; Roobert does. Used only for entries whose
+  // name contains non-ASCII characters (e.g. "Pokémon"), via font_for_name().
+  s.accent_font =
+      pd->graphics->loadFont("/System/Fonts/Roobert-11-Medium.pft", &fontErr);
 
   strncpy(s.folder, config->folder, ROM_PICKER_MAX_PATH - 1);
 
@@ -314,6 +339,8 @@ static void draw(void) {
     int y = LIST_Y + row * ROW_HEIGHT;
     int is_selected =
         (s.valid_count > 0 && s.valid_indices[s.cursor] == file_idx);
+
+    pd->graphics->setFont(font_for_name(e->name));
 
     if (is_selected) {
       pd->graphics->fillRect(0, y - 2, SCREEN_WIDTH, ROW_HEIGHT + 2,
