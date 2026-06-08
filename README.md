@@ -101,6 +101,7 @@ void rom_picker_update(void);
 | Button | Action |
 |--------|--------|
 | Up / Down | Move selection |
+| Left / Right | Move selection by one page |
 | A | Confirm and launch selected file |
 
 ## Compatibility rules

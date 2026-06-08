@@ -10,6 +10,7 @@
 #define SCREEN_WIDTH 400
 #define REPEAT_INITIAL_DELAY 20 // frames before repeat starts (~667ms at 30fps)
 #define REPEAT_INTERVAL 4       // frames between repeats (~133ms at 30fps)
+#define NAV_BUTTONS (kButtonUp | kButtonDown | kButtonLeft | kButtonRight)
 
 // White pixels on a 50% checkerboard mask — painted over a row after drawing
 // text to make it appear dimmed on Playdate's 1-bit display.
@@ -89,6 +90,104 @@ static int matches_extension(const char *filename) {
 
 static int entry_compare(const void *a, const void *b) {
   return strcmp(((const RomEntry *)a)->name, ((const RomEntry *)b)->name);
+}
+
+static int clamp_int(int value, int min, int max) {
+  if (value < min)
+    return min;
+  if (value > max)
+    return max;
+  return value;
+}
+
+static int max_scroll(void) {
+  return (s.file_count > VISIBLE_ROWS) ? (s.file_count - VISIBLE_ROWS) : 0;
+}
+
+static void keep_cursor_visible(void) {
+  if (s.valid_count == 0)
+    return;
+
+  int file_idx = s.valid_indices[s.cursor];
+  if (file_idx < s.scroll)
+    s.scroll = file_idx;
+  if (file_idx >= s.scroll + VISIBLE_ROWS)
+    s.scroll = file_idx - VISIBLE_ROWS + 1;
+  s.scroll = clamp_int(s.scroll, 0, max_scroll());
+}
+
+static void move_cursor_by(int delta) {
+  if (s.valid_count == 0 || delta == 0)
+    return;
+
+  s.cursor = clamp_int(s.cursor + delta, 0, s.valid_count - 1);
+  keep_cursor_visible();
+}
+
+static int valid_cursor_at_or_after(int file_idx) {
+  for (int i = 0; i < s.valid_count; i++) {
+    if (s.valid_indices[i] >= file_idx)
+      return i;
+  }
+  return s.valid_count - 1;
+}
+
+static int valid_cursor_at_or_before(int file_idx) {
+  for (int i = s.valid_count - 1; i >= 0; i--) {
+    if (s.valid_indices[i] <= file_idx)
+      return i;
+  }
+  return 0;
+}
+
+static void page_cursor_by(int pages) {
+  if (s.valid_count == 0 || s.file_count == 0 || pages == 0)
+    return;
+
+  int current_file_idx = s.valid_indices[s.cursor];
+  int current_row = clamp_int(current_file_idx - s.scroll, 0, VISIBLE_ROWS - 1);
+  int target_scroll = clamp_int(s.scroll + pages * VISIBLE_ROWS, 0, max_scroll());
+  int target_file_idx = target_scroll + current_row;
+  int target_page_start = target_scroll;
+  int target_page_end =
+      clamp_int(target_scroll + VISIBLE_ROWS - 1, 0, s.file_count - 1);
+
+  if (target_scroll == s.scroll) {
+    target_file_idx = (pages > 0) ? (s.file_count - 1) : 0;
+  }
+
+  target_file_idx = clamp_int(target_file_idx, 0, s.file_count - 1);
+  if (pages > 0) {
+    int target_cursor = valid_cursor_at_or_after(target_file_idx);
+    if (s.valid_indices[target_cursor] > target_page_end) {
+      int fallback_cursor = valid_cursor_at_or_before(target_file_idx);
+      if (s.valid_indices[fallback_cursor] >= target_page_start)
+        target_cursor = fallback_cursor;
+    }
+    s.cursor = target_cursor;
+  } else {
+    int target_cursor = valid_cursor_at_or_before(target_file_idx);
+    if (s.valid_indices[target_cursor] < target_page_start) {
+      int fallback_cursor = valid_cursor_at_or_after(target_file_idx);
+      if (s.valid_indices[fallback_cursor] <= target_page_end)
+        target_cursor = fallback_cursor;
+    }
+    s.cursor = target_cursor;
+  }
+  s.scroll = target_scroll;
+  keep_cursor_visible();
+}
+
+static void apply_navigation(PDButtons buttons) {
+  if (buttons & kButtonLeft) {
+    page_cursor_by(-1);
+  } else if (buttons & kButtonRight) {
+    page_cursor_by(1);
+  } else if (buttons & kButtonUp) {
+    move_cursor_by(-1);
+  } else if (buttons & kButtonDown) {
+    move_cursor_by(1);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -213,60 +312,37 @@ static void handle_input(void) {
   if (s.valid_count == 0)
     return;
 
-  PDButtons dir = current & (kButtonUp | kButtonDown);
-  int move_up = 0, move_down = 0;
+  PDButtons dir = current & NAV_BUTTONS;
+  PDButtons nav_buttons = 0;
 
-  if (pushed & (kButtonUp | kButtonDown)) {
+  if (pushed & NAV_BUTTONS) {
     s.repeat_timer = 0;
     s.repeat_active = 0;
-    move_up = !!(pushed & kButtonUp);
-    move_down = !!(pushed & kButtonDown);
+    nav_buttons = pushed & NAV_BUTTONS;
   } else if (dir) {
     s.repeat_timer++;
     int threshold = s.repeat_active ? REPEAT_INTERVAL : REPEAT_INITIAL_DELAY;
     if (s.repeat_timer >= threshold) {
       s.repeat_timer = 0;
       s.repeat_active = 1;
-      move_up = !!(dir & kButtonUp);
-      move_down = !!(dir & kButtonDown);
+      nav_buttons = dir;
     }
   } else {
     s.repeat_timer = 0;
     s.repeat_active = 0;
   }
 
-  if (move_up && s.cursor > 0) {
-    s.cursor--;
-    int file_idx = s.valid_indices[s.cursor];
-    if (file_idx < s.scroll)
-      s.scroll = file_idx;
-  }
-  if (move_down && s.cursor < s.valid_count - 1) {
-    s.cursor++;
-    int file_idx = s.valid_indices[s.cursor];
-    if (file_idx >= s.scroll + VISIBLE_ROWS)
-      s.scroll = file_idx - VISIBLE_ROWS + 1;
-  }
+  apply_navigation(nav_buttons);
 
   if (!s.pd->system->isCrankDocked()) {
     s.crank_accum += s.pd->system->getCrankChange();
     while (s.crank_accum >= 30.0f) {
       s.crank_accum -= 30.0f;
-      if (s.cursor < s.valid_count - 1) {
-        s.cursor++;
-        int file_idx = s.valid_indices[s.cursor];
-        if (file_idx >= s.scroll + VISIBLE_ROWS)
-          s.scroll = file_idx - VISIBLE_ROWS + 1;
-      }
+      move_cursor_by(1);
     }
     while (s.crank_accum <= -30.0f) {
       s.crank_accum += 30.0f;
-      if (s.cursor > 0) {
-        s.cursor--;
-        int file_idx = s.valid_indices[s.cursor];
-        if (file_idx < s.scroll)
-          s.scroll = file_idx;
-      }
+      move_cursor_by(-1);
     }
   }
 
