@@ -8,6 +8,9 @@
 #define LIST_X 10
 #define LIST_Y 15
 #define SCREEN_WIDTH 400
+#define SCROLLBAR_WIDTH 4
+#define SCROLLBAR_X (SCREEN_WIDTH - SCROLLBAR_WIDTH)
+#define LIST_TEXT_WIDTH (SCROLLBAR_X - LIST_X - 2)
 #define REPEAT_INITIAL_DELAY 20 // frames before repeat starts (~667ms at 30fps)
 #define REPEAT_INTERVAL 4       // frames between repeats (~133ms at 30fps)
 #define NAV_BUTTONS (kButtonUp | kButtonDown | kButtonLeft | kButtonRight)
@@ -28,7 +31,7 @@ typedef struct {
 static struct {
   PlaydateAPI *pd;
   char folder[ROM_PICKER_MAX_PATH];
-  char extensions[ROM_PICKER_MAX_EXTENSIONS][32];
+  char extensions[ROM_PICKER_MAX_EXTENSIONS][ROM_PICKER_MAX_EXT_LEN];
   int extension_count;
   RomPickerCallback on_select;
   void *userdata;
@@ -67,12 +70,25 @@ static int has_non_ascii(const char *str) {
   return 0;
 }
 
+static LCDFont *fallback_font(void) {
+  if (s.font)
+    return s.font;
+  if (s.accent_font)
+    return s.accent_font;
+  return s.bold_font;
+}
+
 // Font to draw a given entry name with: the accent fallback when the name has
 // non-ASCII bytes (and the fallback loaded), otherwise the preferred face.
 static LCDFont *font_for_name(const char *name) {
   if (s.accent_font && has_non_ascii(name))
     return s.accent_font;
-  return s.font;
+  return fallback_font();
+}
+
+static void set_font_if_available(LCDFont *font) {
+  if (font)
+    s.pd->graphics->setFont(font);
 }
 
 static int matches_extension(const char *filename) {
@@ -115,6 +131,12 @@ static int clamp_int(int value, int min, int max) {
 
 static int max_scroll(void) {
   return (s.file_count > VISIBLE_ROWS) ? (s.file_count - VISIBLE_ROWS) : 0;
+}
+
+static void scroll_view_by(int rows) {
+  if (rows == 0)
+    return;
+  s.scroll = clamp_int(s.scroll + rows, 0, max_scroll());
 }
 
 static void keep_cursor_visible(void) {
@@ -192,7 +214,17 @@ static void page_cursor_by(int pages) {
 }
 
 static void apply_navigation(PDButtons buttons) {
-  if (buttons & kButtonLeft) {
+  if (s.valid_count == 0) {
+    if (buttons & kButtonLeft) {
+      scroll_view_by(-VISIBLE_ROWS);
+    } else if (buttons & kButtonRight) {
+      scroll_view_by(VISIBLE_ROWS);
+    } else if (buttons & kButtonUp) {
+      scroll_view_by(-1);
+    } else if (buttons & kButtonDown) {
+      scroll_view_by(1);
+    }
+  } else if (buttons & kButtonLeft) {
     page_cursor_by(-1);
   } else if (buttons & kButtonRight) {
     page_cursor_by(1);
@@ -295,8 +327,9 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   if (config->extensions) {
     for (int i = 0; config->extensions[i] && i < ROM_PICKER_MAX_EXTENSIONS;
          i++) {
-      strncpy(s.extensions[i], config->extensions[i], 31);
-      s.extensions[i][31] = '\0';
+      strncpy(s.extensions[i], config->extensions[i],
+              ROM_PICKER_MAX_EXT_LEN - 1);
+      s.extensions[i][ROM_PICKER_MAX_EXT_LEN - 1] = '\0';
       s.extension_count++;
     }
   }
@@ -326,7 +359,7 @@ static void handle_input(void) {
   PDButtons current, pushed;
   s.pd->system->getButtonState(&current, &pushed, NULL);
 
-  if (s.valid_count == 0)
+  if (s.file_count == 0)
     return;
 
   PDButtons dir = current & NAV_BUTTONS;
@@ -355,15 +388,21 @@ static void handle_input(void) {
     s.crank_accum += s.pd->system->getCrankChange();
     while (s.crank_accum >= 30.0f) {
       s.crank_accum -= 30.0f;
-      move_cursor_by(1);
+      if (s.valid_count > 0)
+        move_cursor_by(1);
+      else
+        scroll_view_by(1);
     }
     while (s.crank_accum <= -30.0f) {
       s.crank_accum += 30.0f;
-      move_cursor_by(-1);
+      if (s.valid_count > 0)
+        move_cursor_by(-1);
+      else
+        scroll_view_by(-1);
     }
   }
 
-  if (pushed & kButtonA) {
+  if (s.valid_count > 0 && (pushed & kButtonA)) {
     if (s.on_select) {
       s.on_select(s.files[s.valid_indices[s.cursor]].path, s.userdata);
     }
@@ -374,32 +413,38 @@ static void handle_input(void) {
 // Drawing
 // ---------------------------------------------------------------------------
 
+static void draw_entry_name(PlaydateAPI *pd, const char *name, int y) {
+  pd->graphics->drawTextInRect(name, strlen(name), kUTF8Encoding, LIST_X, y,
+                               LIST_TEXT_WIDTH, ROW_HEIGHT, kWrapClip,
+                               kAlignTextLeft);
+}
+
 static void draw(void) {
   PlaydateAPI *pd = s.pd;
+  LCDFont *body_font = fallback_font();
 
-  if (s.font)
-    pd->graphics->setFont(s.font);
+  set_font_if_available(body_font);
 
   pd->graphics->clear(kColorWhite);
 
-  if (s.valid_count == 0) {
-    if (s.font) {
+  if (s.file_count == 0) {
+    if (body_font) {
       const char *line1 = "Please put ROMs in the folder:";
       const char *line2 = s.folder;
-      LCDFont *line1_font = s.bold_font ? s.bold_font : s.font;
-      int font_h = pd->graphics->getFontHeight(s.font);
+      LCDFont *line1_font = s.bold_font ? s.bold_font : body_font;
+      int font_h = pd->graphics->getFontHeight(body_font);
       int gap = 10; // half the font height
       int total_h = font_h + gap + font_h;
       int line1_y = (240 - total_h) / 2;
       int line2_y = line1_y + font_h + gap;
       int tw1 = pd->graphics->getTextWidth(line1_font, line1, strlen(line1),
                                            kUTF8Encoding, 0);
-      int tw2 = pd->graphics->getTextWidth(s.font, line2, strlen(line2),
+      int tw2 = pd->graphics->getTextWidth(body_font, line2, strlen(line2),
                                            kUTF8Encoding, 0);
-      pd->graphics->setFont(line1_font);
+      set_font_if_available(line1_font);
       pd->graphics->drawText(line1, strlen(line1), kUTF8Encoding,
                              (SCREEN_WIDTH - tw1) / 2, line1_y);
-      pd->graphics->setFont(s.font);
+      set_font_if_available(body_font);
       pd->graphics->drawText(line2, strlen(line2), kUTF8Encoding,
                              (SCREEN_WIDTH - tw2) / 2, line2_y);
     }
@@ -416,23 +461,20 @@ static void draw(void) {
     int is_selected =
         (s.valid_count > 0 && s.valid_indices[s.cursor] == file_idx);
 
-    pd->graphics->setFont(font_for_name(e->name));
+    set_font_if_available(font_for_name(e->name));
 
     if (is_selected) {
       pd->graphics->fillRect(0, y - 2, SCREEN_WIDTH, ROW_HEIGHT + 2,
                              kColorBlack);
       pd->graphics->setDrawMode(kDrawModeInverted);
-      pd->graphics->drawText(e->name, strlen(e->name), kUTF8Encoding, LIST_X,
-                             y);
+      draw_entry_name(pd, e->name, y);
       pd->graphics->setDrawMode(kDrawModeCopy);
     } else if (!e->valid) {
-      pd->graphics->drawText(e->name, strlen(e->name), kUTF8Encoding, LIST_X,
-                             y);
+      draw_entry_name(pd, e->name, y);
       pd->graphics->fillRect(0, y - 2, SCREEN_WIDTH, ROW_HEIGHT + 2,
                              (LCDColor)kDimOverlay);
     } else {
-      pd->graphics->drawText(e->name, strlen(e->name), kUTF8Encoding, LIST_X,
-                             y);
+      draw_entry_name(pd, e->name, y);
     }
   }
 
@@ -444,8 +486,10 @@ static void draw(void) {
       thumb_h = 8;
     int thumb_y =
         (track_h - thumb_h) * s.scroll / (s.file_count - VISIBLE_ROWS);
-    pd->graphics->fillRect(396, 0, 4, track_h, kColorBlack);
-    pd->graphics->fillRect(397, thumb_y, 2, thumb_h, kColorWhite);
+    pd->graphics->fillRect(SCROLLBAR_X, 0, SCROLLBAR_WIDTH, track_h,
+                           kColorBlack);
+    pd->graphics->fillRect(SCROLLBAR_X + 1, thumb_y, SCROLLBAR_WIDTH - 2,
+                           thumb_h, kColorWhite);
   }
 }
 

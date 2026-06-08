@@ -6,7 +6,7 @@ A general-purpose Playdate C library for browsing and launching ROM/game files f
 
 - Scans a folder using Playdate's file APIs
 - Filters files by one or more extensions (e.g. only `.nes` files)
-- Skips files with non-ASCII characters in their name
+- Displays non-ASCII/UTF-8 filenames with a fallback font when needed
 - Invalid or incompatible files are shown at reduced opacity so the user knows they can't be selected
 - D-pad navigation, A to confirm selection
 - Calls a user-supplied callback with the file path when a game is picked
@@ -106,12 +106,9 @@ void rom_picker_update(void);
 
 ## Compatibility rules
 
-A file is shown with full opacity and can be selected when **both** of these are true:
+A file is shown with full opacity and can be selected when its extension matches one of the entries in `extensions` (case-insensitive). If `extensions` is `NULL`, all files are selectable.
 
-- Its extension matches one of the entries in `extensions` (case-insensitive)
-- Its filename contains only printable ASCII characters (0x20 – 0x7E)
-
-All other files are shown at 50% opacity and cannot be selected.
+All other files are shown at 50% opacity and cannot be selected. Filename character set does not affect selectability; non-ASCII filenames are rendered with a fallback font when available.
 
 ## Limits
 
@@ -120,3 +117,4 @@ All other files are shown at 50% opacity and cannot be selected.
 | `ROM_PICKER_MAX_FILES` | 256 | Maximum files shown |
 | `ROM_PICKER_MAX_PATH` | 256 | Maximum full path length |
 | `ROM_PICKER_MAX_EXTENSIONS` | 8 | Maximum number of valid extensions |
+| `ROM_PICKER_MAX_EXT_LEN` | 32 | Maximum extension length including terminator |
