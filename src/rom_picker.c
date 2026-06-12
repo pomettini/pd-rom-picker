@@ -41,7 +41,11 @@ static struct {
   // Asheville face has no accented glyphs, so those rows render with Roobert.
   LCDFont *accent_font;
 
-  RomEntry files[ROM_PICKER_MAX_FILES];
+  // Heap-allocated in rom_picker_init, freed in rom_picker_free. As a static
+  // array this was ~130 KB (MAX_FILES x ~520 B) of .bss occupied for the whole
+  // app lifetime; on the heap it only exists while the picker is active, and
+  // it stops displacing the host app's own static buffers.
+  RomEntry *files;
   int file_count;
   int valid_indices[ROM_PICKER_MAX_FILES]; // indices into files[] for valid
                                            // entries
@@ -241,7 +245,7 @@ static void apply_navigation(PDButtons buttons) {
 
 static void collect_file(const char *filename, void *userdata) {
   (void)userdata;
-  if (s.file_count >= ROM_PICKER_MAX_FILES)
+  if (!s.files || s.file_count >= ROM_PICKER_MAX_FILES)
     return;
 
   // skip directories (Playdate appends '/' to directory names)
@@ -290,6 +294,14 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   s.pd = pd;
   s.on_select = config->on_select;
   s.userdata = config->userdata;
+
+  s.files = calloc(ROM_PICKER_MAX_FILES, sizeof(RomEntry));
+  if (!s.files) {
+    // Degrade to the empty-folder UI: draw() and handle_input() both bail out
+    // on valid_count == 0 before ever touching files[].
+    pd->system->logToConsole("[rom_picker] failed to allocate file list (%d bytes)",
+                             (int)(ROM_PICKER_MAX_FILES * sizeof(RomEntry)));
+  }
 
   const char *fontErr = NULL;
   s.font = pd->graphics->loadFont("/System/Fonts/Asheville-Sans-14-Light.pft",
@@ -349,7 +361,10 @@ void rom_picker_init(PlaydateAPI *pd, const RomPickerConfig *config) {
   }
 }
 
-void rom_picker_free(void) { memset(&s, 0, sizeof(s)); }
+void rom_picker_free(void) {
+  free(s.files);
+  memset(&s, 0, sizeof(s));
+}
 
 // ---------------------------------------------------------------------------
 // Input
